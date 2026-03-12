@@ -1,55 +1,54 @@
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from pathlib import Path
 
-from sqlalchemy import MetaData, Table, Column, Integer, String, Float, DateTime
+from sqlalchemy import MetaData
 
 from db_connection import SQLRunner, get_engine
-from request.request import retrieve_data
 
+from extract.request import get_stations, get_metobs
+from transform.transform import stations_data_cleaning, metobs_data_cleaning
+from load.load import define_stations_table, define_metobs_table, create_tables, load_to_sql
 
 
 # specify desired start and end time
-end_time = datetime.today()
-start_time = end_time - timedelta(hours=24)
+# choose time interval: the latest 7 AM to 7 AM
+now = datetime.now()
+end_time = datetime.combine(now.date(), time(7)) - timedelta(days=now.time() < time(7)) # the most recent 7:00 AM
+start_time = end_time - timedelta(days=1)
 
-# specify station ID - Aarhus (Ødum 06072), Odense (Årslev 06126), Ballerup (Jægersborg 06181)
-station_ids = ['06072', '06126', '06181']
-
-# specify parameter ID
-parameter_ids = ['radia_glob', 'wind_speed']
-
-#df1 = retrieve_data(parameter_id='wind_speed', station_id='06072', start_time=start_time, end_time=end_time)
-#print(df1.info())
+station_id = '06072'
+parameter = 'wind_speed'
 
 
+# Fetch meterological observation data
+df1 = get_metobs(parameter, station_id, start_time, end_time)
+
+# Fetch all stations
+stations = get_stations()
 
 
-# PostgreSQL connection
+# TODO: clean the data
+
+
+# SQL connection
 
 config_file = Path('./db_config.ini')
-sql_runner = SQLRunner(get_engine(config_file))
+#sql_runner = SQLRunner(get_engine(config_file))
 
 
-# Create table
+# create tables
 
-# create a MetaData object
 metadata = MetaData()
 
-# define table
-table = Table(
-    'raw', metadata,
-    Column('id', Integer, primary_key=True),
-    Column('time', DateTime, nullable=False),
-    Column('parameter', String, nullable=False),
-    Column('value', Float, nullable=True),
-    Column('station_id', String(5), nullable=False),
-    Column('latitude', Float, nullable=False),
-    Column('longitude', Float, nullable=False)
-)
+metobs_table = define_metobs_table(metadata)
+stations_table = define_stations_table(metadata)
 
-# create the table in the database
-#metadata.create_all(sql_runner.engine)
+#create_tables(sql_runner, metadata)
 
 
+# load into database
+
+#load_to_sql(sql_runner, metobs_table, df1)
+#load_to_sql(sql_runner, stations_table, stations) # gives error because of ()
 

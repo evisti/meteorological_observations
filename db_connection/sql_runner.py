@@ -40,8 +40,8 @@ class SQLRunner:
         with self.Session() as session:
             result = session.execute(text(query))
             return result
-    
 
+    
 def get_engine(config_file: Path) -> Engine:
     """Create a SQLAlchemy engine based on the configuration file.
 
