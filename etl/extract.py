@@ -3,57 +3,110 @@ import pandas as pd
 from datetime import datetime
 
 
-url_dmi_stations = 'https://opendataapi.dmi.dk/v2/metObs/collections/station/items'
-url_dmi_observations = 'https://opendataapi.dmi.dk/v2/metObs/collections/observation/items'
-
-
-def _fetch_data(url: str, params: dict) -> pd.DataFrame:
+def _make_request(url: str, params: dict, headers: str=None):
     '''
     Submit GET request with url and parameters, and convert result to DataFrame
     '''
-    timeout = 61 # seconds
+    timeout =  10 # seconds
     try:
-        response = requests.get(url, params=params, timeout=timeout) #TODO: pørv med stream=True og brug iter_content(chunck_size=somenumber)
+        response = requests.get(url, params=params, headers=headers, timeout=timeout) # prøv evt. med stream=True og iter_content(chunck_size)
         print('Fetching URL:', response.url)
         response.raise_for_status()
     except requests.exceptions.HTTPError as e:
-        print('Error: HTTP error')
-        print(e)
-    except requests.exceptions.ReadTimeout:
-        print('Error: Request time out')
-    except requests.exceptions.ConnectionError:
-        print('Error: Connection error')
-    except requests.exceptions.RequestException:
-        print('Error: Exception request')
+        print('Error: HTTP\n', e)
+    except requests.exceptions.ReadTimeout as e:
+        print('Error: Request time out\n', e)
+    except requests.exceptions.ConnectionError as e:
+        print('Error: Connection\n', e)
+    except requests.exceptions.RequestException as e:
+        print('Error: Exception request\n', e)
 
     # decode json response
-    result = response.json()
-    print(*result['links'], sep='\n')
+    return response.json()
+    
 
-    # convert to DataFrame
-    df = pd.json_normalize(result['features'])
+def _normalize_response(response, key: str) -> pd.DataFrame:
+    '''Convert to DataFrame'''
+    df = pd.json_normalize(response[key])
     if df.empty:
         print('No data')
 
     return df
 
 
-def fetch_stations(station_id: str=None) -> pd.DataFrame:
+def _construct_datetime_argument(from_time: datetime=None, to_time: datetime=None) -> str:
+    '''Convert datetime to ISO format string'''
+    if from_time and to_time:
+        return f'{from_time.isoformat()}Z/{to_time.isoformat()}Z'
+    elif from_time and not to_time:
+        return f'{from_time.isoformat()}Z'
+    elif not from_time and to_time:
+        return f'{to_time.isoformat()}Z'
+    else: 
+        return None
+
+
+def get_stations(base_url, station_id: str=None) -> pd.DataFrame:
+    print('\nStations - Extract')
     # define query parameters for the request
     query_params = {}
     if station_id: query_params['stationId'] = station_id
 
-    return _fetch_data(url_dmi_stations, query_params)
+    # url for stations
+    url = base_url + '/station/items'
+
+    # retrive data
+    response = _make_request(url, query_params)
+    records = _normalize_response(response, key='features')
+
+    return records
 
 
-def fetch_observations(parameter: str, station_id: str, start_time: datetime, end_time: datetime) -> pd.DataFrame:
+def get_observations(base_url, parameter: str, station_id: str, from_time: datetime, to_time: datetime, limit: int=5000) -> pd.DataFrame:
+    print('\nObservations - Extract')
     # define query parameters for the request
-    datetime_str = start_time.isoformat() + 'Z/' + end_time.isoformat() + 'Z'
     query_params = {
-        'datetime' : datetime_str#,
-#        'limit' : '1000'  # maximum number of observations
-        }
+        'datetime' : _construct_datetime_argument(from_time=from_time, to_time=to_time),
+        'limit' : limit,  # maximum number of records to return
+        'offset': 0}
     if parameter: query_params['parameterId'] = parameter
     if station_id: query_params['stationId'] = station_id
 
-    return _fetch_data(url_dmi_observations, query_params)
+    # url for observations
+    url = base_url + '/observation/items'
+
+    # retrieve data
+    dfs = []
+    while True:
+        response = _make_request(url, query_params)
+        records = _normalize_response(response, key='features')
+        dfs.append(records)
+
+        number_returned = response['numberReturned']
+        if number_returned < limit:
+            break
+
+        url = response['links'][-1]['href']
+        query_params = {}
+
+    df = pd.concat(dfs, axis='rows')
+    print('Records:', len(df))
+
+    return df
+
+
+def get_spac(url, from_time: datetime=None, to_time: datetime=None):
+    print('\nSPAC - Extract')
+    # define authorization token
+    token = 'token'
+    headers = {'Authorization': f'Bearer {token}'}
+
+    # define query parameters for the request
+    query_params = {'limit': 5000} # maximum number of records to return
+    if from_time: query_params['from'] = _construct_datetime_argument(from_time=from_time)
+
+    # retrieve data
+    response = _make_request(url, query_params, headers)
+    records = _normalize_response(response, key='records')
+
+    return records

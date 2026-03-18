@@ -48,19 +48,31 @@ def observations_table(metadata: MetaData) -> Table:
     return table
 
 
+def spac_table(metadata: MetaData) -> Table:
+    table = Table(
+        'spac', metadata,
+        Column('id', Integer, primary_key=True),
+        Column('timestamp', DateTime),
+        Column('BME280.humidity', Float),
+        Column('BME280.pressure', Float),
+        Column('BME280.temperature', Float),
+        Column('DS18B20.temperature', Float)
+    )
+    return table
+
+
 def drop_tables(sql_runner: SQLRunner, metadata: MetaData):
-    metadata.reflect(sql_runner.engine)
+    #metadata.reflect(sql_runner.engine)
     metadata.drop_all(sql_runner.engine)
 
 
 def create_tables(sql_runner: SQLRunner, metadata: MetaData, dropfirst: bool=True):
     engine = sql_runner.engine
-    
+
     if dropfirst: drop_tables(engine, metadata)
-    
     metadata.create_all(engine)
 
-    print('Tables created:', end=' ')
+    print('\nTables created:', end=' ')
     print(*metadata.tables.keys(), sep=', ')
 
 

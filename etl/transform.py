@@ -27,7 +27,9 @@ def reset_index(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def transform_stations(df: pd.DataFrame):
+def clean_stations(df: pd.DataFrame):
+
+    print('\nStations - Transform')
 
     # change date columns dtype to datetime
     columns_with_date = [
@@ -61,12 +63,17 @@ def transform_stations(df: pd.DataFrame):
 
     # TODO: Replace empty values?
 
-    print('\nStation data info:')
+    print('Data info:')
     df.info()
 
 
-def transform_observations(df: pd.DataFrame):
+def clean_observations(df: pd.DataFrame):
+
+    print('\nObservations - Transform')
     
+    # reset index
+    reset_index(df)
+
     # change date columns dtype to datetime
     column_with_date = 'properties.observed'
     date_formatting(df, column_with_date)
@@ -86,5 +93,29 @@ def transform_observations(df: pd.DataFrame):
     # delete dupllicate rows
     drop_duplicates(df)
 
-    print('\nObservation data info:')
+    print('Data info:')
+    df.info()
+
+
+def clean_spac(df: pd.DataFrame):
+
+    print('\nSPAC - Transform')
+    
+    # change date columns dtype to datetime
+    column_with_date = 'timestamp'
+    date_formatting(df, column_with_date)
+
+    # calculate temperature in celsius from raw reading
+    df['DS18B20.temperature'] = df['reading.DS18B20.raw_reading'] / 1000 
+
+    # delete columns we don't want
+    df.drop(columns=['id', 'reading.DS18B20.device_name', 'reading.DS18B20.raw_reading'], inplace=True)
+
+    # rename columns
+    df.rename(lambda s: s.replace('reading.', ''), axis="columns", inplace=True)
+
+    # delete dupllicate rows
+    drop_duplicates(df)
+
+    print('Data info:')
     df.info()
